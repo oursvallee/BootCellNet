@@ -1,0 +1,1 @@
+This is the repository for BootCellNet, a procedure for scRNA-seq analysis, containing several functions written in R.
