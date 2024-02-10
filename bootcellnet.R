@@ -1,29 +1,19 @@
-# BootCellNet algorithms
-# 12/6/2023
+# BootCellNet.R
+# contains all the functions needed
 #
-# summary of 
-# C:/work/20230212_cellstrap/20230620_scrna_test_5/20230620_1_test.R
-#
-# for usage, see 
-# C:/work/20230212_cellstrap/20230620_scrna_test_5/20230620_1_test.R
-# C:/work/20230212_cellstrap/20231001_scrna_test_8_covid19/PBMC/20231108_pbmc_analysis_2.R
-#
-########################################################
+# BootCellNet, a resampling-based procedure, promotes unsupervised identification of cell populations via robust inference of gene regulatory networks.
+# https://www.biorxiv.org/content/10.1101/2024.02.06.579236v1
+##############################################################################
 
 
-##################################################
-# procdure
-# (1) K-nn smoothing
-# (2) "cellstrap": (i) select N cells for M times, (ii) calculate GRN, (iii) write down the data into a file
-# (3) aggregate the data; count TFs, count edges
-# (4) draw graph: weighted nodes and edges?
 
 #===================================
-# (1) K-nn smoothing **possible improvement here**
-# cf C:/work/20230212_cellstrap/20230710_scrna_test_6/20230710_1_test.R
-# adaptive thresholding w/ Otsu method has been implemented, but does not affect much...
-# gzip (7/25/2023 added)
-# avoid data retrieval from dgCMatrix, faster than original (10/24/2023)
+# K-nn smoothing **possible improvement here**
+# knnsmo: calculate k-nn smoothing first, and write the gzipped file
+# knnsmo.dir: calculate k-nn smoothing while writing the gzipped file
+# need to run a command to append the header for matrix market format.
+#
+# somehow this step takes longer than expected. somebody help
 
 knnsmo <- function(data, umap, K=50, theta=1, file, progress=T){
   require(Matrix)
@@ -101,26 +91,35 @@ knnsmo <- function(data, umap, K=50, theta=1, file, progress=T){
   if(progress){
     cat(paste0("Writing file ", file, "...\n"))
   }
-  # writeMM(data.cs, file=file)
   writeMMgz(data.cs, file)
   return(data.cs)
 }
 
+#-----------------
+# writing MM to gzipped file
+writeMMgz <- function(x, file) {
+  mtype <- "real"
+  if (is(x, "ngCMatrix")) {
+    mtype <- "integer"
+  }
+  writeLines(
+    c(
+      sprintf("%%%%MatrixMarket matrix coordinate %s general", mtype),
+      sprintf("%s %s %s", x@Dim[1], x@Dim[2], length(x@x))
+    ),
+    gzfile(file)
+  )
+  data.table::fwrite(
+    x = summary(x),
+    file = file,
+    append = TRUE,
+    sep = " ",
+    row.names = FALSE,
+    col.names = FALSE
+  )
+}
 
-# usage
-# data.kns <- knnsmo(data=data, umap=umap.coord, file="20230620_test_kns.mtx.gz")
 
-# # you can gzip the mtx file
-# data.kns <- readMM("20230620_test_kns.mtx.gz")
-# rownames(data.kns) <- rownames(data)
-# colnames(data.kns) <- colnames(data)
-
-
-#===================================
-# (1) K-nn smoothing **possible improvement here**
-# gzip (7/25/2023 added)
-# avoid data retrieval from dgCMatrix, faster than original (10/24/2023)
-# writing directly into a gz file (11/1/2023)
 
 knnsmo.dir <- function(data, umap, K=50, theta=1, file, progress=T){
   require(Matrix)
@@ -206,32 +205,10 @@ knnsmo.dir <- function(data, umap, K=50, theta=1, file, progress=T){
   }
 }
 
-# usage
-# knnsmo.dir(data=data, umap=umap.coord, file="20230620_test_kns.mtx.gz")
-# cat header_20230620_test_kns.mtx.gz 20230620_test_kns.mtx.gz > wh_20230620_test_kns.mtx.gz
-
-# # you can gzip the mtx file
-# data.kns <- readMM("wh_20230620_test_kns.mtx.gz")
-# rownames(data.kns) <- rownames(data)
-# colnames(data.kns) <- colnames(data)
-
-
 
 
 #===================================
-# (2) "BootCellNet": (i) select N cells for M times, (ii) calculate GRN, (iii) write down the data into a file
-# goi should be given in a same format as rownames of data
-# 11/10/2023: changed the name; added "shuffle" option 
-# 11/13/2023: "shuffle" can be either "all", "goi", or "none"
-# 11/14/2023: "nested" version, takes more time but can get lots of bootstrap samples!!
-# 11/14/2023: "nested" loop is not necessarily run on here; "shuffle" here is all or none.
-# 12/6/2023: avoid data retrieval from dgCMatrix, faster than original
-# original: with Jorstad-human data and N=200, takes 3 min/specimen...
-# new: takes < 10sec with the same, takes 1 min/specimen with the data and N=20000
-
-# data: should be dgCMatrix
-# N: number of cells to sample
-# M: number of iteration
+# BootCellNet
 
 bootcellnet <- function(data, N=5000, M=100, goi=NULL, 
                         directory, suffix=NULL, 
@@ -247,10 +224,6 @@ bootcellnet <- function(data, N=5000, M=100, goi=NULL,
   
   G0 <- dim(data)[1] # gene number
   N0 <- dim(data)[2] # cell number
-  
-  # data.p <- data@p
-  # data.x <- data@x
-  # data.i <- data@i
   
   for(m in 1:M){
     
@@ -282,8 +255,7 @@ bootcellnet <- function(data, N=5000, M=100, goi=NULL,
     
     sobj.cs <- CreateSeuratObject(counts=data.cs)
     sobj.cs <- FindVariableFeatures(sobj.cs, selection.method = selection.method, nfeatures = nfeatures, verbose=verbose)
-    # sobj.cs <- ScaleData(sobj.cs, verbose=verbose)
-    
+ 
     vgenes <- VariableFeatures(object = sobj.cs)
     
     # GRN
@@ -303,32 +275,9 @@ bootcellnet <- function(data, N=5000, M=100, goi=NULL,
   
 }
 
-# choice of estimator??
-# "mi.empirical" : This estimator computes the entropy of the empirical probability distribution.
-# "mi.mm" : This is the Miller-Madow asymptotic bias corrected empirical estimator.
-# "mi.shrink" : This is a shrinkage estimate of the entropy of a Dirichlet probability distribution.
-# "mi.sg" : This is the Schurmann-Grassberger estimate of the entropy of a Dirichlet probability
-# distribution.
-# "pearson" : This computes mutual information for normally distributed variable.
-# "spearman" : This computes mutual information for normally distributed variable using Spearman’s
-# correlation instead of Pearson’s correlation.
-# "kendall" : This computes mutual information for normally distributed variable using Kendall’s
-# correlation instead of Pearson’s correlation.
-
-# usage
-# annot <- read.table("c:/work/20230212_cellstrap/20230302_scrna_test_2/features_annot.tsv", row.names=1, header=F, fill=T, na.strings=NA, stringsAsFactors = F)
-# goi <- read.table("c:/work/20230212_cellstrap/20230302_scrna_test_2/TF.geneids.txt", header=F, stringsAsFactors = F)
-# 
-# annot.goi <- annot[annot[,2]%in%unlist(goi),3]
-# 
-# cellstrap(data.kns, N=5000, M=30, goi=annot.goi, directory = "test/")
-# 
-# x <- read.table("cellstrap_1.txt", row.names=1, header=T, stringsAsFactors = F)
-
 #===================================
-# (3) aggregate the data; count TFs, count edges
-# 11/14/2023: avoid loop...
-# 11/14/2023: "nested" version; you can run the nested loop here
+# aggregate the data; count TFs, count edges
+# "nested" version; you can run the nested loop here
 # R: number of nested iteration, 0 means no iteration
 
 aggregateBCN <- function(directory, verbose=FALSE, R=100){
@@ -391,24 +340,14 @@ aggregateBCN <- function(directory, verbose=FALSE, R=100){
   return(list(aracne=sd.aracne, node.count=genes.count, edge.count=count.aracne))
 }
 
-# usage
-# agr.cells <- aggregate.cellstrap(directory="test/")
-# 
-# tiff("20230620_node-count_all.tiff")
-# hist(agr.cells$node.count, breaks=30)
-# dev.off()
-# tiff("20230620_edge-count_all.tiff")
-# hist(agr.cells$edge.count[agr.cells$edge.count>0], breaks=30)
-# dev.off()
-
 
 #===================================
-# (4) p value?
+# calculate p value
 # x: edge count
-# alpha = X/MK*M0
+# alpha = X/MhatK*M
 # M0: number of resampling for x 
 # X: shuffled edge count
-# M: number of resampling for shuffled data X
+# Mhat: number of resampling for shuffled data X
 # K: number of shuffling
 
 computeEdgePvals <- function(x, alpha){
@@ -479,8 +418,7 @@ computeNodePvals <- function(x, alpha){
 
 
 #===================================
-# (5) GRN graph
-# cf C:/work/20230212_cellstrap/20231001_scrna_test_8_covid19/NatMed_2020_Liao/20231016_analysis_Liao-CoV_1.R
+# clean up GRN
 cleanGRN <- function(aracne.mtx, node.pvals, edge.pvals, node.cutoff=.0001, edge.cutoff=.0001){
   
   require(igraph)
@@ -512,39 +450,155 @@ cleanGRN <- function(aracne.mtx, node.pvals, edge.pvals, node.cutoff=.0001, edge
 }
 
 
-
-# usage
-#
-# pdf("20231016_cellstrap-graph0.pdf")
-# plot(ar.graph$graph.clean$graph, layout=ar.graph$graph.clean$layout,
-#      vertex.color="white", vertex.cex=0.5, vertex.size=10, vertex.label.cex=0.5,
-#      edge.width=ar.graph$graph.clean$weight)
-# dev.off()
-
-
-
-#===================================
-# writing MM to gz
-writeMMgz <- function(x, file) {
-  mtype <- "real"
-  if (is(x, "ngCMatrix")) {
-    mtype <- "integer"
-  }
-  writeLines(
-    c(
-      sprintf("%%%%MatrixMarket matrix coordinate %s general", mtype),
-      sprintf("%s %s %s", x@Dim[1], x@Dim[2], length(x@x))
-    ),
-    gzfile(file)
-  )
-  data.table::fwrite(
-    x = summary(x),
-    file = file,
-    append = TRUE,
-    sep = " ",
-    row.names = FALSE,
-    col.names = FALSE
-  )
+#=======================================================
+# calculate MDS and store the data
+# ar.graph: list of graph parameters generated by cleanGRN in BCN
+# dealing with only "clean" graph
+MDSGRN <- function(ar.graph){
+  
+  a <- ar.graph$graph.clean$graph
+  
+  mds <- mds.ip(a, genes=TRUE)
+  
+  node.shape <- rep("circle", vcount(a))
+  node.shape[names(V(a)) %in% mds] <- "square"
+  
+  ar.graph$graph.clean[["MDS"]] <- mds
+  ar.graph$graph.clean[["node_shape_MDS"]] <- node.shape
+  
+  return(ar.graph)
+  
 }
+
+#--------------------------------------
+# translate to an integer programming
+# input a graph of igraph format, and return a list of genes (or a lpsolve object)
+
+mds.ip <- function(graph, genes=T){
+  require(lpSolve)
+  require(igraph)
+  
+  a <- as_adjacency_matrix(graph)
+  
+  n <- dim(a)[1]
+  
+  f.obj <- rep(1,n)
+  f.con <- as.matrix(a)
+  f.con <- f.con+diag(rep(1,n))
+  f.dir <- rep(">=",n)
+  f.rhs <- rep(1,n)
+  
+  lpsol <- lp("min", f.obj, f.con, f.dir, f.rhs, int.vec=1:n, all.bin=T)
+  
+  if(genes){
+    return(colnames(lpsol$constraints)[lpsol$solution==1])
+  }
+  else{
+    return(lpsol)
+  }  
+}
+
+
+#=======================================================
+# averaging the data based on the given gene set
+# gset: a set of genes to be checked
+# sobj: Seurat object; active.ident should be set before doing this
+
+avgGS <- function(gset, sobj){
+  
+  ident <- sort(unique(sobj@active.ident))
+  aa <- sobj[[sobj@active.assay]]
+  if(class(aa)=="Assay5"){
+    data <- (sobj[[sobj@active.assay]]$data)[gset,]
+  }else{
+    data <- (sobj[[sobj@active.assay]]@data)[gset,]
+  }
+  
+  data.avg <- matrix(nrow=length(gset), ncol=length(ident))
+  
+  for(i in 1:length(ident)){
+    data.curr <- data[,sobj@active.ident==ident[i]]
+    if(sum(sobj@active.ident==ident[i])>1){
+      data.avg[,i] <- rowMeans(data.curr)  
+    }
+    else{
+      data.avg[,i] <- data.curr
+    }
+  }
+  
+  rownames(data.avg) <- gset
+  colnames(data.avg) <- ident
+  
+  return(data.avg)
+}
+
+
+
+#=======================================================
+# put new clusters onto the Seurat object 
+# sobj: Seurat object; active.ident should be set before doing this
+# clst: clusters to be put
+
+# wrapper
+newclst <- function(sobj, clst, clst.name="MDS_clst"){
+  
+  clst.new <- map.newclst(sobj, clst)
+  levels <- unique(clst)
+  
+  clst.new <- factor(clst.new, levels=levels)
+  sobj[[clst.name]] <- clst.new
+  
+  return(sobj)
+}
+
+#----------------------------
+# auxiliary function to map the clusters
+
+map.newclst <- function(sobj, clst) {
+  active.ident <- as.character(sobj@active.ident)
+  unique.active.ident <- unique(active.ident)
+  new.ident <- active.ident
+  
+  for(i in 1:length(unique.active.ident)){
+    new.ident[active.ident==unique.active.ident[i]] <- clst[unique.active.ident[i]]
+  }
+  
+  names(new.ident) <- names(sobj@active.ident)
+  
+  return(new.ident)
+}
+
+
+
+
+#=======================================================
+# calculate adjusted Rand index
+# give two clusters, and return the index
+
+# wrapper
+AdjRandInx <- function(sobj, clst1, clst2){
+  clst1.so <- map.newclst(sobj, clst1)
+  clst2.so <- map.newclst(sobj, clst2)
+  
+  return(calc.ari(clst1.so, clst2.so))
+}
+
+# auxiliary func
+calc.ari <- function(x, y){
+  
+  cont.tab <- table(x, y)
+  cont.tab.bco <- sum(cont.tab*(cont.tab-1)/2)
+  
+  rsum <- rowSums(cont.tab); csum <- colSums(cont.tab)
+  rsum.bco <- sum(rsum*(rsum-1))/2; csum.bco <- sum(csum*(csum-1))/2
+  tot.bco <- sum(rsum)*(sum(rsum)-1)/2
+  
+  ari <- (cont.tab.bco-rsum.bco*csum.bco/tot.bco)/((rsum.bco+csum.bco)/2-rsum.bco*csum.bco/tot.bco)
+  
+  return(ari)
+  
+}
+
+
 
 
