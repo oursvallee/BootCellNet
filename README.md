@@ -36,24 +36,46 @@ Just download the "bootcellnet2.R", read it by source("YOUR_PATH/bootcellnet.R")
 
 # Tutorial
 
-Here's a tutorial for those who want to test BootCellNet.
+A tutorial has been provided for those who want to test BootCellNet.
 
 ## Install
 
 Download tutorial_files.tar.gz, and expand all the files into one directory. Put bootcellnet2.R into the same directory.
 
-PBMC_test.R: A kind of tutorial. You can run BootCellNet on PBMC data provided by 10x genomics to see how it works.
+Also, please download the required data from 10x before start:
 
-Also, please download the required data from 10x.
+wget https://cf.10xgenomics.com/samples/cell-exp/3.1.0/manual_5k_pbmc_NGSC3_ch5/manual_5k_pbmc_NGSC3_ch5_filtered_feature_bc_matrix.tar.g
 
-wget https://cf.10xgenomics.com/samples/cell-exp/3.1.0/manual_5k_pbmc_NGSC3_ch5/manual_5k_pbmc_NGSC3_ch5_filtered_feature_bc_matrix.tar.gz
 gunzip manual_5k_pbmc_NGSC3_ch5_filtered_feature_bc_matrix.tar.gz
 
-### Depending on the version of Seurat you are using, the UMAP image of the data may be different from what is shown in the BootCellNet paper.###
-For convenience, I put RDS files and .RData files for both versions of Seurat. All are included in tutorial_files.tar.gz
+### What's inside
+
+PBMC_tutorial.R: A kind of tutorial. You can run BootCellNet on PBMC data provided by 10x genomics to see how it works.
+
+MORF_genelist_geneids.txt: A list of GeneIDs for human transcription factors, taken from Jeong et al, Cell, 2024
+
+pbmc_annot_geneid.txt: A list of annotation data for the 10x data.
+
+#### Note
+Depending on the version of Seurat you are using, the UMAP image of the data may be different from what is shown in the BootCellNet paper. Thus I included these files for the calculated results.
+
+pbmc_kns_[old|new].mtx.gz: kNN-smoothed data, obtained from data processed by Seurat ver 4 or 5, respectively.
+
+PBMC_tutorial_[old|new].RData: Results of calculation obtained by Seurat ver 4 or 5, respectively. This does not include 10x data.
+
+pbmc_bcn_[old|new]_[|shuffle]: Folders containing results of bootstrap calculation of GRN, for the reconstruction (100 files) or the shuffling (1000 files), obtained from data processed by Seurat ver 4 or 5, respectively.
 
 Please check the comments in PBMC_test.R for detail.
 
+These files are not provided here, because of the space limit.
+
+PBMC_tutorial_[old|new].rds: RDS file, containing 10x data, PCA and UMAP coordinates, and the results of clustering, calculated by Seurat ver 4 or 5, respectively.
+
+Therefore, I made them available from the link below:
+
+old: https://drive.google.com/file/d/1IuueU-eRHicJhNC5CoupmO4NiC6hQpnN/view?usp=sharing
+
+new: https://drive.google.com/file/d/1MsHMxvSxyCU-DWbbJ5LGZCNsNLEXKltJ/view?usp=sharing
 
 
 
